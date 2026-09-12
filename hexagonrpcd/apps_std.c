@@ -82,6 +82,9 @@ static uint32_t apps_std_fclose(void *data,
 	const uint32_t *first_in = inbufs[0].p;
 	int ret;
 
+	int fd = *first_in;
+
+
 	if (fd >= 0 && fd < 1024 && sensor_native_fds[fd]) {
 		if (close(fd) < 0) {
 			fprintf(stderr, "Could not close native fd %d: %s\n",
