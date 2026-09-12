@@ -185,7 +185,7 @@ struct hexagonfs_dirent *construct_root_dir(const char *prefix, const char *dsp)
 				hfs_mkdir("sensors", 1,
 					hfs_mkdir("registry", 3,
 						hfs_map("registry", sns_reg),
-						hfs_map("sns_reg_version", sns_reg_version).
+						hfs_map("sns_reg_version", sns_reg_version),
 						hfs_map("temp.json", temp_reg_config)
 					)
 				)

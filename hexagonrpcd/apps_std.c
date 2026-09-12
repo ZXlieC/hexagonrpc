@@ -194,6 +194,25 @@ static uint32_t apps_std_fseek(void *data,
 	return 0;
 }
 
+static uint32_t apps_std_frename (const char *oldname,
+                              const char *newname) {
+	int nErr = AEE_SUCCESS;
+
+	if (NULL == oldname || NULL == newname)
+	return EINVAL;
+	fprintf("%s for file with oldname %s to new name %s", __func__,
+				oldname, newname);
+
+	nErr = rename(oldname, newname);
+	if (nErr != AEE_SUCCESS) {
+	nErr = ERRNO;
+	fprintf("Error 0x%x: failed to rename file, errno is %s\n", nErr,
+			strerror(ERRNO));
+	}
+
+	return nErr;
+}
+
 static uint32_t apps_std_fopen_with_env(void *data,
 					const struct fastrpc_io_buffer *inbufs,
 					struct fastrpc_io_buffer *outbufs)
@@ -590,7 +609,10 @@ static const struct fastrpc_function_impl apps_std_procs[] = {
 		.impl = apps_std_stat,
 	},
 	{ .def = NULL, .impl = NULL, },
-	{ .def = NULL, .impl = NULL, },
+	{
+		.def = &apps_std_frename_def,
+		.impl = apps_std_frename,
+	},
 	{ .def = NULL, .impl = NULL, },
 	{
 		.def = &apps_std_fclose_fd_def,
