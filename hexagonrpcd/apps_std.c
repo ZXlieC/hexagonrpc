@@ -38,6 +38,7 @@ struct apps_std_ctx {
 	int rootfd;
 	int adsp_avs_cfg_dirfd;
 	int adsp_library_dirfd;
+	bool native_fds[MAX_NATIVE_FDS];
 	struct hexagonfs_fd *fds[HEXAGONFS_MAX_FD];
 };
 
@@ -74,6 +75,22 @@ static uint32_t apps_std_fclose(void *data,
 	struct apps_std_ctx *ctx = data;
 	const uint32_t *first_in = inbufs[0].p;
 	int ret;
+
+	if (fd >= 0 && fd < 1024 && sensor_native_fds[fd]) {
+		if (close(fd) < 0) {
+			fprintf(stderr, "Could not close native fd %d: %s\n",
+				fd, strerror(errno));
+			sensor_native_fds[fd] = false;
+			return AEE_EFAILED;
+		}
+
+		sensor_native_fds[fd] = false;
+
+		fprintf(stderr,
+			"sensor registry: closed native fd %d\n", fd);
+
+		return 0;
+	}
 
 	ret = hexagonfs_close(ctx->fds, *first_in);
 	if (ret) {
@@ -314,6 +331,23 @@ static uint32_t apps_std_fopen_with_env(void *data,
 			flags = O_WRONLY | O_CREAT | O_APPEND;
 
 		fd = open("/usr/share/qcom/sensors/temp.json", flags, 0644);
+
+		if (fd < 0) {
+			fprintf(stderr,
+				"Could not open sensor temp.json for writing: %s\n",
+		strerror(errno));
+			return AEE_EFAILED;
+		}
+
+		if (fd < 1024)
+			sensor_native_fds[fd] = true;
+
+			fprintf(stderr,
+				"sensor registry: opened temp.json for writing -> fd %d\n",
+		fd);
+
+		*out = fd;
+		return 0;
 
 	if (fd < 0) {
 		fprintf(stderr,
