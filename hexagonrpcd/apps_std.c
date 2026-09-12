@@ -205,9 +205,9 @@ static uint32_t apps_std_frename (const char *oldname,
 
 	nErr = rename(oldname, newname);
 	if (nErr != AEE_SUCCESS) {
-	nErr = ERRNO;
+	nErr = AEE_EFAILED;
 	fprintf("Error 0x%x: failed to rename file, errno is %s\n", nErr,
-			strerror(ERRNO));
+			strerror(errno));
 	}
 
 	return nErr;
