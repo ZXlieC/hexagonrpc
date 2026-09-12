@@ -25,6 +25,7 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <limits.h>
 
 #include "aee_error.h"
 #include "interfaces/apps_std.def"
@@ -195,32 +196,86 @@ static uint32_t apps_std_fseek(void *data,
 }
 
 static uint32_t apps_std_frename(
-	void *ctx,
-	const struct fastrpc_io_buffer *inbufs,
-	struct fastrpc_io_buffer *outbufs)
+    void *ctx,
+    const struct fastrpc_io_buffer *inbufs,
+    struct fastrpc_io_buffer *outbufs)
 {
-	const char *oldname = (const char *)inbufs[1].p;
-	const char *newname = (const char *)inbufs[2].p;
+    const char *oldname = (const char *)inbufs[1].p;
+    const char *newname = (const char *)inbufs[2].p;
 
-	(void)ctx;
-	(void)outbufs;
+    char oldpath[PATH_MAX];
+    char newpath[PATH_MAX];
 
-	fprintf(stderr,
-		"apps_std_frename for file with oldname '%s' to new name '%s'\n",
-	 oldname ? oldname : "(null)",
-		newname ? newname : "(null)");
+    (void)ctx;
+    (void)outbufs;
 
-	if (!oldname || !newname)
-		return 1;
+    fprintf(stderr,
+            "apps_std_frename for file with oldname '%s' to new name '%s'\n",
+            oldname,
+            newname);
 
-	if (rename(oldname, newname) < 0) {
-		fprintf(stderr,
-			"Error 0x1: failed to rename '%s' -> '%s': %s\n",
-	  oldname, newname, strerror(errno));
-		return 1;
-	}
+    /*
+     * Qualcomm sensor registry virtual paths:
+     *
+     * /mnt/vendor/persist/sensors/registry/registry/../temp.json
+     *     -> /usr/share/qcom/sensors/temp.json
+     *
+     * /mnt/vendor/persist/sensors/registry/registry/foo
+     *     -> /usr/share/qcom/sensors/registry/foo
+     */
 
-	return 0;
+    if (strncmp(oldname,
+                "/mnt/vendor/persist/sensors/registry/registry/../",
+                strlen("/mnt/vendor/persist/sensors/registry/registry/../")) == 0) {
+
+        snprintf(oldpath, sizeof(oldpath),
+                 "/usr/share/qcom/sensors/%s",
+                 oldname + strlen("/mnt/vendor/persist/sensors/registry/registry/../"));
+
+    } else if (strncmp(oldname,
+                       "/mnt/vendor/persist/sensors/registry/",
+                       strlen("/mnt/vendor/persist/sensors/registry/")) == 0) {
+
+        snprintf(oldpath, sizeof(oldpath),
+                 "/usr/share/qcom/sensors/registry/%s",
+                 oldname + strlen("/mnt/vendor/persist/sensors/registry/"));
+
+    } else {
+        snprintf(oldpath, sizeof(oldpath), "%s", oldname);
+    }
+
+    if (strncmp(newname,
+                "/mnt/vendor/persist/sensors/registry/registry/",
+                strlen("/mnt/vendor/persist/sensors/registry/registry/")) == 0) {
+
+        snprintf(newpath, sizeof(newpath),
+                 "/usr/share/qcom/sensors/registry/%s",
+                 newname + strlen("/mnt/vendor/persist/sensors/registry/registry/"));
+
+    } else if (strncmp(newname,
+                       "/mnt/vendor/persist/sensors/registry/",
+                       strlen("/mnt/vendor/persist/sensors/registry/")) == 0) {
+
+        snprintf(newpath, sizeof(newpath),
+                 "/usr/share/qcom/sensors/registry/%s",
+                 newname + strlen("/mnt/vendor/persist/sensors/registry/"));
+
+    } else {
+        snprintf(newpath, sizeof(newpath), "%s", newname);
+    }
+
+    fprintf(stderr,
+            "apps_std_frename mapped to '%s' -> '%s'\n",
+            oldpath, newpath);
+
+    if (rename(oldpath, newpath) < 0) {
+        fprintf(stderr,
+                "Error 0x1: failed to rename '%s' -> '%s': %s\n",
+                oldpath, newpath, strerror(errno));
+        return 1;
+    }
+
+    return 0;
 }
 
 static uint32_t apps_std_fopen_with_env(void *data,
