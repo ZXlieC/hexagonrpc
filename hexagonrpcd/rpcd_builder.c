@@ -29,6 +29,7 @@
 #define ACDBDATA		"/acdb/"
 #define DSP_LIBS		"/dsp/"
 #define SENSORS_CONFIG		"/sensors/config/"
+#define ODM_CONFIG		"/odm/config/"
 #define SENSORS_REGISTRY	"/sensors/registry/"
 #define SNS_REG_VERSION		"/sensors/sns_reg_version"
 #define SNS_REG_CONFIG		"/sensors/sns_reg.conf"
@@ -112,14 +113,15 @@ static struct hexagonfs_dirent *hfs_map_or_empty(const char *name, const char *p
  */
 struct hexagonfs_dirent *construct_root_dir(const char *prefix, const char *dsp)
 {
-	char *acdbdata, *dsp_libs, *sns_cfg, *sns_reg, *sns_reg_version, *sns_reg_config, *socinfo;
+	char *acdbdata, *dsp_libs, *sns_cfg, odm_cfg, *sns_reg, *sns_reg_version, *sns_reg_config, *socinfo;
 	size_t n_prefix;
-	struct hexagonfs_dirent *persist_dir, *vendor_dir;
+	struct hexagonfs_dirent *persist_dir, *vendor_dir, *odm_dir;
 
 	n_prefix = strlen(prefix);
 
 	acdbdata = malloc(n_prefix + strlen(ACDBDATA) + 1);
 	sns_cfg = malloc(n_prefix + strlen(SENSORS_CONFIG) + 1);
+	odm_cfg = malloc(n_prefix + strlen(ODM_CONFIG) + 1);
 	sns_reg = malloc(n_prefix + strlen(SENSORS_REGISTRY) + 1);
 	sns_reg_version = malloc(n_prefix + strlen(SNS_REG_VERSION) + 1);
 	sns_reg_config = malloc(n_prefix + strlen(SNS_REG_CONFIG) + 1);
@@ -135,6 +137,11 @@ struct hexagonfs_dirent *construct_root_dir(const char *prefix, const char *dsp)
 	if (sns_cfg != NULL) {
 		strcpy(sns_cfg, prefix);
 		strcat(sns_cfg, SENSORS_CONFIG);
+	}
+
+	if (odm_cfg != NULL) {
+		strcpy(odm_cfg, prefix);
+		strcat(odm_cfg, ODM_CONFIG);
 	}
 
 	if (sns_reg != NULL) {
@@ -190,7 +197,15 @@ struct hexagonfs_dirent *construct_root_dir(const char *prefix, const char *dsp)
 				)
 			);
 
-	return hfs_mkdir("/", 6,
+	odm_dir = hfs_mkdir("odm", 1,
+				hfs_mkdir("etc", 1,
+					hfs_mkdir("sensor", 1,
+						hfs_map_or_empty("config", odm_cfg)
+					)
+				)
+			);
+
+	return hfs_mkdir("/", 7,
 			hfs_mkdir("mnt", 1,
 				hfs_mkdir("vendor", 1,
 					persist_dir
@@ -212,6 +227,7 @@ struct hexagonfs_dirent *construct_root_dir(const char *prefix, const char *dsp)
 					)
 				)
 			),
-			vendor_dir
+			vendor_dir,
+			odm_dir
 		);
 }
