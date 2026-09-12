@@ -194,8 +194,13 @@ static uint32_t apps_std_fseek(void *data,
 	return 0;
 }
 
-static uint32_t apps_std_frename (const char *oldname,
-                              const char *newname) {
+static uint32_t apps_std_frename(
+	void *ctx,
+	const struct fastrpc_io_buffer *inbufs,
+	struct fastrpc_io_buffer *outbufs)
+{
+	const char *oldname = inbufs[0].p;
+	const char *newname = inbufs[1].p;
 	int nErr = AEE_SUCCESS;
 
 	if (NULL == oldname || NULL == newname)
