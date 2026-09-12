@@ -149,42 +149,81 @@ static uint32_t apps_std_fread(void *data,
 }
 
 static uint32_t apps_std_fwrite(void *data,
-			        const struct fastrpc_io_buffer *inbufs,
-			        struct fastrpc_io_buffer *outbufs)
+				const struct fastrpc_io_buffer *inbufs,
+				struct fastrpc_io_buffer *outbufs)
 {
-	// struct apps_std_ctx *ctx = data;
 	const struct {
 		uint32_t fd;
 		uint32_t buf_size;
 	} *first_in = inbufs[0].p;
+
 	const uint8_t *buf = inbufs[1].p;
+
 	struct {
 		uint32_t written;
 		uint32_t is_eof;
 	} *first_out = outbufs[0].p;
+
 	ssize_t ret;
 
-	ret = 0;
-#ifdef HEXAGONRPC_VERBOSE
-	printf("write(%u, %u) -> %ld\n", first_in->fd,
-					 first_in->buf_size,
-					 ret);
+	/*
+	 * Sensor registry temporary files are opened directly with
+	 * open(2), therefore handle these descriptors with write(2)
+	 * instead of hexagonfs.
+	 */
+	if (first_in->fd < 1024 && sensor_native_fds[first_in->fd]) {
+		ret = write(first_in->fd, buf, first_in->buf_size);
 
-	printf("write() data:");
-	for (unsigned int i = 0; i < first_in->buf_size; i++)
-		printf(" 0x%x", buf[i]);
-	printf("\n");
+		if (ret < 0) {
+			fprintf(stderr,
+				"sensor registry: write(fd %u, %u) failed: %s\n",
+				first_in->fd,
+				first_in->buf_size,
+				strerror(errno));
+			return AEE_EFAILED;
+		}
+
+		first_out->written = ret;
+		first_out->is_eof = (ret < first_in->buf_size);
+
+		fprintf(stderr,
+			"sensor registry: write(fd %u, %u) -> %zd\n",
+			first_in->fd,
+			first_in->buf_size,
+			ret);
+
+#ifdef HEXAGONRPC_VERBOSE
+		printf("write(%u, %u) -> %ld\n",
+		       first_in->fd,
+		       first_in->buf_size,
+		       ret);
 #endif
 
-	const uint8_t fake_buf_dir[] = {0x44, 0x49, 0x52}; // "DIR"
-	const uint8_t fake_buf_version3[] = {0x76, 0x65, 0x72, 0x73, 0x69, 0x6f, 0x6e, 0x3d, 0x33}; // "version=3"
-	if ((first_in->buf_size == 3 && memcmp(buf, fake_buf_dir, 3) == 0) ||
-		(first_in->buf_size == 9 && memcmp(buf, fake_buf_version3, 9) == 0)) {
+		return 0;
+	}
+
+	/*
+	 * Existing fake writes used by the current implementation.
+	 */
+	const uint8_t fake_buf_dir[] = {
+		0x44, 0x49, 0x52
+	}; /* "DIR" */
+
+	const uint8_t fake_buf_version3[] = {
+		0x76, 0x65, 0x72, 0x73, 0x69, 0x6f, 0x6e,
+		0x3d, 0x33
+	}; /* "version=3" */
+
+	if ((first_in->buf_size == 3 &&
+	     memcmp(buf, fake_buf_dir, 3) == 0) ||
+	    (first_in->buf_size == 9 &&
+	     memcmp(buf, fake_buf_version3, 9) == 0)) {
 
 		first_out->written = first_in->buf_size;
 		first_out->is_eof = 0;
 
-		printf("WARNING: Faking successful fwrite call for \"%s\"!\n", buf);
+		printf("WARNING: Faking successful fwrite call for \"%s\"!\n",
+		       buf);
 
 		return 0;
 	}
@@ -329,49 +368,35 @@ static uint32_t apps_std_fopen_with_env(void *data,
 	 * writable file directly on the host filesystem.
 	 */
 	if ((rw_mode == 'w' || rw_mode == 'a') &&
-		!strcmp(path,
-			"/mnt/vendor/persist/sensors/registry/registry/../temp.json")) {
+    !strcmp(path,
+	    "/mnt/vendor/persist/sensors/registry/registry/../temp.json")) {
 
-		int flags;
+	int flags;
 
 	if (rw_mode == 'w')
 		flags = O_WRONLY | O_CREAT | O_TRUNC;
-		else
-			flags = O_WRONLY | O_CREAT | O_APPEND;
+	else
+		flags = O_WRONLY | O_CREAT | O_APPEND;
 
-		fd = open("/usr/share/qcom/sensors/temp.json", flags, 0644);
-
-		if (fd < 0) {
-			fprintf(stderr,
-				"Could not open sensor temp.json for writing: %s\n",
-		strerror(errno));
-			return AEE_EFAILED;
-		}
-
-		if (fd < 1024)
-			sensor_native_fds[fd] = true;
-
-			fprintf(stderr,
-				"sensor registry: opened temp.json for writing -> fd %d\n",
-		fd);
-
-		*out = fd;
-		return 0;
+	fd = open("/usr/share/qcom/sensors/temp.json", flags, 0644);
 
 	if (fd < 0) {
 		fprintf(stderr,
 			"Could not open sensor temp.json for writing: %s\n",
-	  strerror(errno));
+			strerror(errno));
 		return AEE_EFAILED;
 	}
 
+	if (fd < 1024)
+		sensor_native_fds[fd] = true;
+
 	fprintf(stderr,
 		"sensor registry: opened temp.json for writing -> fd %d\n",
-	 fd);
+		fd);
 
 	*out = fd;
 	return 0;
-			}
+}
 
 	fd = hexagonfs_openat(ctx->fds, ctx->rootfd, dirfd, path);
 	if (fd < 0) {
