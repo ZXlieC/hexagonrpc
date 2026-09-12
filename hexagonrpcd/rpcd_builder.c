@@ -113,7 +113,7 @@ static struct hexagonfs_dirent *hfs_map_or_empty(const char *name, const char *p
  */
 struct hexagonfs_dirent *construct_root_dir(const char *prefix, const char *dsp)
 {
-	char *acdbdata, *dsp_libs, *sns_cfg, odm_cfg, *sns_reg, *sns_reg_version, *sns_reg_config, *socinfo;
+	char *acdbdata, *dsp_libs, *sns_cfg, *odm_cfg, *sns_reg, *sns_reg_version, *sns_reg_config, *socinfo;
 	size_t n_prefix;
 	struct hexagonfs_dirent *persist_dir, *vendor_dir, *odm_dir;
 
