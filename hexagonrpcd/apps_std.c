@@ -26,6 +26,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <limits.h>
+#include <fcntl.h>
 
 #include "aee_error.h"
 #include "interfaces/apps_std.def"
@@ -294,29 +295,42 @@ static uint32_t apps_std_fopen_with_env(void *data,
 		return AEE_EBADPARM;
 
 	rw_mode = ((const char *) inbufs[4].p)[0];
-	if (rw_mode == 'w' || rw_mode == 'a') {
-		fprintf(stderr, "(IGNORE LIMITATION) Tried to open %s for writing\n",
-				(const char *) inbufs[3].p);
-		//return AEE_EUNSUPPORTED;
-	}
+	const char *path = inbufs[3].p;
 
-	if (!strcmp(inbufs[1].p, "ADSP_LIBRARY_PATH")) {
-		dirfd = ctx->adsp_library_dirfd;
-	} else if (!strcmp(inbufs[1].p, "ADSP_AVS_CFG_PATH")) {
-		dirfd = ctx->adsp_avs_cfg_dirfd;
-	} else {
-		fprintf(stderr, "Unknown search directory %s\n",
-				(const char *) inbufs[1].p);
-		return AEE_EBADPARM;
-	}
+	/*
+	 * Qualcomm sensor registry writes temporary registry data here.
+	 * The virtual HexagonFS is currently read-only, so handle this
+	 * writable file directly on the host filesystem.
+	 */
+	if ((rw_mode == 'w' || rw_mode == 'a') &&
+		!strcmp(path,
+			"/mnt/vendor/persist/sensors/registry/registry/../temp.json")) {
 
-	if (dirfd < 0) {
-		fprintf(stderr, "Could not open virtual %s: %s\n",
-				(const char *) inbufs[1].p, strerror(-dirfd));
+		int flags;
+
+	if (rw_mode == 'w')
+		flags = O_WRONLY | O_CREAT | O_TRUNC;
+		else
+			flags = O_WRONLY | O_CREAT | O_APPEND;
+
+		fd = open("/usr/share/qcom/sensors/temp.json", flags, 0644);
+
+	if (fd < 0) {
+		fprintf(stderr,
+			"Could not open sensor temp.json for writing: %s\n",
+	  strerror(errno));
 		return AEE_EFAILED;
 	}
 
-	fd = hexagonfs_openat(ctx->fds, ctx->rootfd, dirfd, inbufs[3].p);
+	fprintf(stderr,
+		"sensor registry: opened temp.json for writing -> fd %d\n",
+	 fd);
+
+	*out = fd;
+	return 0;
+			}
+
+	fd = hexagonfs_openat(ctx->fds, ctx->rootfd, dirfd, path);
 	if (fd < 0) {
 		fprintf(stderr, "Could not open %s: %s\n",
 				(const char *) inbufs[3].p,
