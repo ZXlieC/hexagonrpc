@@ -205,14 +205,14 @@ static uint32_t apps_std_frename(
 
 	if (NULL == oldname || NULL == newname)
 	return EINVAL;
-	fprintf("%s for file with oldname %s to new name %s", __func__,
-				oldname, newname);
+	fprintf(stderr, "%s for file with oldname %s to new name %s\n",
+		__func__, oldname, newname);
 
 	nErr = rename(oldname, newname);
 	if (nErr != AEE_SUCCESS) {
 	nErr = AEE_EFAILED;
-	fprintf("Error 0x%x: failed to rename file, errno is %s\n", nErr,
-			strerror(errno));
+	fprintf(stderr, "Error 0x%x: failed to rename file, errno is %s\n",
+		nErr, strerror(errno));
 	}
 
 	return nErr;
