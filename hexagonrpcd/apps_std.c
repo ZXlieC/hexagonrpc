@@ -199,23 +199,28 @@ static uint32_t apps_std_frename(
 	const struct fastrpc_io_buffer *inbufs,
 	struct fastrpc_io_buffer *outbufs)
 {
-	const char *oldname = inbufs[0].p;
-	const char *newname = inbufs[1].p;
-	int nErr = AEE_SUCCESS;
+	const char *oldname = (const char *)inbufs[1].p;
+	const char *newname = (const char *)inbufs[2].p;
 
-	if (NULL == oldname || NULL == newname)
-	return EINVAL;
-	fprintf(stderr, "%s for file with oldname %s to new name %s\n",
-		__func__, oldname, newname);
+	(void)ctx;
+	(void)outbufs;
 
-	nErr = rename(oldname, newname);
-	if (nErr != AEE_SUCCESS) {
-	nErr = AEE_EFAILED;
-	fprintf(stderr, "Error 0x%x: failed to rename file, errno is %s\n",
-		nErr, strerror(errno));
+	fprintf(stderr,
+		"apps_std_frename for file with oldname '%s' to new name '%s'\n",
+	 oldname ? oldname : "(null)",
+		newname ? newname : "(null)");
+
+	if (!oldname || !newname)
+		return 1;
+
+	if (rename(oldname, newname) < 0) {
+		fprintf(stderr,
+			"Error 0x1: failed to rename '%s' -> '%s': %s\n",
+	  oldname, newname, strerror(errno));
+		return 1;
 	}
 
-	return nErr;
+	return 0;
 }
 
 static uint32_t apps_std_fopen_with_env(void *data,
