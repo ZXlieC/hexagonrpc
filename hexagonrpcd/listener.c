@@ -142,13 +142,15 @@ static int return_for_next_invoke(int fd,
 				  struct fastrpc_io_buffer **decoded)
 {
 	struct fastrpc_decoder_context *ctx;
-	char inbufs[256];
+	char *inbufs = NULL;
 	char *outbufs = NULL;
 	uint32_t inbufs_len;
 	uint32_t outbufs_len;
+	uint32_t inbufs_size;
 	int ret;
 
-	outbufs_len = outbufs_calculate_size(REMOTE_SCALARS_OUTBUFS(*sc), returned);
+	outbufs_len = outbufs_calculate_size(REMOTE_SCALARS_OUTBUFS(*sc),
+					     returned);
 
 	if (outbufs_len) {
 		outbufs = malloc(outbufs_len);
@@ -157,49 +159,79 @@ static int return_for_next_invoke(int fd,
 			return -1;
 		}
 
-		outbufs_encode(REMOTE_SCALARS_OUTBUFS(*sc), returned, outbufs);
+		outbufs_encode(REMOTE_SCALARS_OUTBUFS(*sc),
+			       returned, outbufs);
+	}
+
+	/*
+	 * First ask the DSP for the size of the next request.
+	 *
+	 * FastRPC normally uses a small request, but the Qualcomm sensor
+	 * registry can send fwrite() buffers larger than 256 bytes.
+	 */
+	inbufs_size = 4096;
+
+	inbufs = malloc(inbufs_size);
+	if (inbufs == NULL) {
+		perror("Could not allocate input buffer");
+		ret = -1;
+		goto err_free_outbufs;
 	}
 
 	ret = adsp_listener_next2(fd,
 				  *rctx, result,
 				  outbufs_len, outbufs,
 				  rctx, handle, sc,
-				  &inbufs_len, 256, inbufs);
+				  &inbufs_len,
+				  inbufs_size,
+				  inbufs);
 	if (ret) {
 		if (ret == -1)
 			perror("Could not fetch next FastRPC message");
 		else
-			fprintf(stderr, "Could not fetch next FastRPC message: %d\n", ret);
+			fprintf(stderr,
+				"Could not fetch next FastRPC message: %d\n",
+				ret);
 
-		goto err_free_outbufs;
+		goto err_free_inbufs;
 	}
 
-	if (inbufs_len > 256) {
-		fprintf(stderr, "Large (>256B) input buffers aren't implemented\n");
+	if (inbufs_len > inbufs_size) {
+		fprintf(stderr,
+			"Input buffer too large: %u bytes (max %u)\n",
+			inbufs_len, inbufs_size);
 		ret = -1;
-		goto err_free_outbufs;
+		goto err_free_inbufs;
 	}
 
 	ctx = inbuf_decode_start(*sc);
 	if (!ctx) {
 		perror("Could not start decoding");
 		ret = -1;
-		goto err_free_outbufs;
+		goto err_free_inbufs;
 	}
 
 	ret = inbuf_decode(ctx, inbufs_len, inbufs);
 	if (ret) {
 		perror("Could not decode");
-		goto err_free_outbufs;
+		goto err_free_inbufs;
 	}
 
 	if (!inbuf_decode_is_complete(ctx)) {
 		fprintf(stderr, "Expected more input buffers\n");
 		ret = -1;
-		goto err_free_outbufs;
+		goto err_free_inbufs;
 	}
 
 	*decoded = inbuf_decode_finish(ctx);
+
+	free(inbufs);
+	free(outbufs);
+
+	return 0;
+
+err_free_inbufs:
+	free(inbufs);
 
 err_free_outbufs:
 	free(outbufs);
