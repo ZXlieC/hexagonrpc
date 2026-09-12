@@ -34,6 +34,8 @@
 #include "iobuffer.h"
 #include "listener.h"
 
+#define MAX_NATIVE_FDS 64
+
 struct apps_std_ctx {
 	int rootfd;
 	int adsp_avs_cfg_dirfd;
