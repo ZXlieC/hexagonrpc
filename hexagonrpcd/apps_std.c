@@ -36,6 +36,10 @@
 
 #define MAX_NATIVE_FDS 64
 
+#include <stdbool.h>
+
+static bool sensor_native_fds[1024];
+
 struct apps_std_ctx {
 	int rootfd;
 	int adsp_avs_cfg_dirfd;
