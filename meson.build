@@ -4,7 +4,7 @@ version_array = meson.project_version().split('.')
 api_version = version_array[0] + '.' + version_array[1]
 
 include = include_directories('include')
-client_target = get_option('libexecdir') / 'hexagonrpc'
+client_target = get_option('libdir') / 'hexagonrpc'
 
 cflags = ['-Wall', '-Wextra', '-Wpedantic', '-Wno-unused-parameter']
 
