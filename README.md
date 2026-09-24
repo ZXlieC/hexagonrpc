@@ -132,7 +132,9 @@ defined by the `-R` option, or in `/usr/share/qcom` by default:
     acdb			/vendor/etc/acdbdata
     dsp			/vendor/dsp
     sensors/config		/vendor/etc/sensors/config
+    odm/config/    /odm/etc/sensors/config
     sensors/registry	/mnt/vendor/persist/sensors/registry/registry
+    sensors/sns_reg_version    /mnt/vendor/persist/sensors/registry/sns_reg_version
     sensors/sns_reg.conf	/vendor/etc/sensors/sns_reg_config
     socinfo			/sys/devices/soc0
 
