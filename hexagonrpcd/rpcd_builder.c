@@ -151,7 +151,7 @@ struct hexagonfs_dirent *construct_root_dir(const char *prefix, const char *dsp)
 
 	if (sns_reg_version != NULL) {
 		strcpy(sns_reg_version, prefix);
-		strcat(sns_reg_version, SNS_REG_CONFIG);
+		strcat(sns_reg_version, SNS_REG_VERSION);
 	}
 
 	if (sns_reg_config != NULL) {
