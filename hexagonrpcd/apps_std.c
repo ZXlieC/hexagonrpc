@@ -27,6 +27,7 @@
 #include <unistd.h>
 #include <limits.h>
 #include <fcntl.h>
+#include <stdlib.h>
 
 #include "aee_error.h"
 #include "interfaces/apps_std.def"
@@ -261,6 +262,88 @@ static uint32_t apps_std_fseek(void *data,
 	return 0;
 }
 
+/* rename(2) cannot move files between filesystems. Copy to a temporary file
+ * beside the destination so the final rename remains atomic, then remove the
+ * source only after the destination has been installed successfully.
+ */
+static int apps_std_rename_across_filesystems(const char *oldpath,
+						      const char *newpath)
+{
+	char temp_path[PATH_MAX] = { 0 };
+	struct stat st;
+	char buf[16384];
+	int src = -1, dst = -1, ret = -1;
+	ssize_t nread;
+	int saved_errno;
+
+	if (lstat(oldpath, &st) < 0)
+		return -1;
+	if (!S_ISREG(st.st_mode)) {
+		errno = EXDEV;
+		return -1;
+	}
+
+	if (snprintf(temp_path, sizeof(temp_path), "%s.XXXXXX", newpath) >=
+	    (int)sizeof(temp_path)) {
+		errno = ENAMETOOLONG;
+		return -1;
+	}
+
+	src = open(oldpath, O_RDONLY | O_CLOEXEC);
+	if (src < 0)
+		goto out;
+	dst = mkstemp(temp_path);
+	if (dst < 0)
+		goto out;
+
+	while ((nread = read(src, buf, sizeof(buf))) != 0) {
+		ssize_t offset = 0;
+
+		if (nread < 0) {
+			if (errno == EINTR)
+				continue;
+			goto out;
+		}
+		while (offset < nread) {
+			ssize_t nwritten = write(dst, buf + offset,
+						 nread - offset);
+
+			if (nwritten < 0 && errno == EINTR)
+				continue;
+			if (nwritten <= 0) {
+				if (nwritten == 0)
+					errno = EIO;
+				goto out;
+			}
+			offset += nwritten;
+		}
+	}
+
+	if (fchmod(dst, st.st_mode & 07777) < 0 || fsync(dst) < 0)
+		goto out;
+	if (close(dst) < 0) {
+		dst = -1;
+		goto out;
+	}
+	dst = -1;
+	if (rename(temp_path, newpath) < 0)
+		goto out;
+	if (unlink(oldpath) < 0)
+		goto out;
+	ret = 0;
+
+out:
+	saved_errno = errno;
+	if (src >= 0)
+		close(src);
+	if (dst >= 0)
+		close(dst);
+	if (ret < 0 && temp_path[0] != '\0')
+		unlink(temp_path);
+	errno = saved_errno;
+	return ret;
+}
+
 static uint32_t apps_std_frename(
     void *ctx,
     const struct fastrpc_io_buffer *inbufs,
@@ -334,7 +417,9 @@ static uint32_t apps_std_frename(
             "apps_std_frename mapped to '%s' -> '%s'\n",
             oldpath, newpath);
 
-    if (rename(oldpath, newpath) < 0) {
+    if (rename(oldpath, newpath) < 0 &&
+        (errno != EXDEV ||
+         apps_std_rename_across_filesystems(oldpath, newpath) < 0)) {
         fprintf(stderr,
                 "Error 0x1: failed to rename '%s' -> '%s': %s\n",
                 oldpath, newpath, strerror(errno));
